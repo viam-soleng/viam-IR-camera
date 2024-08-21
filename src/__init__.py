@@ -1,1 +1,1 @@
-from .dial_sensor import *
+from ir_camera import *

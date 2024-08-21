@@ -1,14 +1,11 @@
 # Standard library
 import cv2
 from PIL import Image
-from digitalio import DigitalInOut
-from adafruit_vl53l0x import VL53L0X
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple, NamedTuple
 from typing_extensions import Self
 
 # Viam module
-from viam.components.board import Board
-from viam.components.camera import Camera, Properties
+from viam.components.camera import Camera, IntrinsicParameters, DistortionParameters
 from viam.logging import getLogger
 from viam.media.video import NamedImage, ViamImage
 from viam.media.utils.pil import viam_to_pil_image, pil_to_viam_image, CameraMimeType
@@ -20,9 +17,17 @@ from viam.resource.types import Model, ModelFamily
 
 LOGGER = getLogger(__name__)
 
-class TOFSensor(Camera, Reconfigurable, Stoppable):
+class IRCamera(Camera, Reconfigurable, Stoppable):
     family = ModelFamily("viam-soleng", "camera")
     MODEL = Model(family, "ir-camera")
+
+    class Properties(NamedTuple):
+        intrinsic_parameters: IntrinsicParameters
+        """The properties of the camera"""
+        distortion_parameters: DistortionParameters
+        """The distortion parameters of the camera"""
+        supports_pcd: bool = True
+        """Whether the camera has a valid implementation of ``get_point_cloud``"""
     
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
