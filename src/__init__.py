@@ -1,1 +1,1 @@
-from ir_camera import *
+from .ir_camera import *

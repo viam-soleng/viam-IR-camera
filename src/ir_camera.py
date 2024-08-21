@@ -74,7 +74,7 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
         self.cap = cv2.VideoCapture(device_path, cv2.CAP_V4L)
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        # cv2.namedWindow('Thermal',cv2.WINDOW_GUI_NORMAL)
+        cv2.namedWindow('Thermal',cv2.WINDOW_GUI_NORMAL)
         # font=cv2.FONT_HERSHEY_SIMPLEX
 
     async def get_image(self, mime_type: str = "", *, extra: Optional[Dict[str, Any]] = None, timeout: Optional[float] = None, **kwargs) -> ViamImage:
