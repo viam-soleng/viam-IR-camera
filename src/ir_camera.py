@@ -27,7 +27,7 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
         """The properties of the camera"""
         distortion_parameters: DistortionParameters
         """The distortion parameters of the camera"""
-        supports_pcd: bool = True
+        supports_pcd: bool = False
         """Whether the camera has a valid implementation of ``get_point_cloud``"""
     
     @classmethod
@@ -71,39 +71,36 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
     
         # # Extract config info
         device_path = get_attribute_from_config("device_path", None, str)
-
+        self.minimum_temperature = get_attribute_from_config("minimum_temperature", 16., float) # Celcius
+        self.maximum_tempertaure = get_attribute_from_config("maximum_temperature", 25., float) # Celcius
+        self.scale = get_attribute_from_config("scale", 1, int)
+        self.blur_radius = get_attribute_from_config("blur_radius", 1, int)
+        
         self.cap = cv2.VideoCapture(device_path, cv2.CAP_V4L)
         self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 0.0)
-
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = round(int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))/2)
-        self.scale = 3
-        self.contrast_alpha = 1.0
-        self.blur_radius = 0
-        print("SELF.WIDTH: {} | SELF.HEIGHT: {}".format(self.width, self.height))
+
+        LOGGER.info("SELF.WIDTH: {} | SELF.HEIGHT: {}".format(self.width, self.height))
+
+    def stop(self, *,  extra: Optional[Mapping[str, Any]] = None, timeout: Optional[float] = None, **kwargs) -> None:
+        LOGGER.info("STOPPING")
+        self.cap.release()
 
     async def get_image(self, mime_type: str = "", *, extra: Optional[Dict[str, Any]] = None, timeout: Optional[float] = None, **kwargs) -> ViamImage:
         if not self.cap.isOpened():
-            print("CAP NOT OPENED")
+            LOGGER.error("video feed is not open, check if any ongoing processes are using the camera")
             return
         
         ret, frame = self.cap.read()
 
         if not ret:
-            print("BAD RETURN")
+            LOGGER.warn("No frame returned, retry")
             return
 
-        # print("pre split")
-        # print(frame.shape)
-        image, bot = np.array_split(frame, 2)
+        imdata, thdata = np.array_split(frame, 2)
 
-        # print("post split")
-        # print(image.shape)
-        thermal_image = await self.create_thermal_image(image)
-        # print("thermal image")
-        # print(thermal_image.shape)
-
-        #print("required size = {},{}".format(self.width, self.height))
+        thermal_image = await self._create_thermal_image(thdata)
         img = Image.frombytes('RGB', (self.width * self.scale, self.height * self.scale), thermal_image)
         return pil_to_viam_image(img.convert('RGB'), CameraMimeType.JPEG)
     
@@ -116,55 +113,35 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
     async def get_properties(self, *, timeout: Optional[float] = None, **kwargs) -> Properties:
         return self.camera_properties
 
-    async def create_thermal_image(self, imdata):
-        converted_image = cv2.cvtColor(imdata,  cv2.COLOR_YUV2BGR_YUYV)
-        scaled_image = cv2.convertScaleAbs(converted_image, alpha=self.contrast_alpha)
-        resize_image = cv2.resize(scaled_image, (self.width * self.scale, self.height * self.scale), interpolation=cv2.INTER_CUBIC)#Scale up!
-       
+    async def _create_thermal_image(self, thdata):
+        heatmap = np.zeros((self.height,self.width,1),dtype=np.uint8)
+
+        min_temp = 1000
+        max_temp = 0
+        for i in range(self.height):
+            for j in range(self.width):
+                hi = thdata[i][j][0]
+                lo = thdata[i][j][1]
+
+                lo = lo*256
+                rawtemp = hi+lo
+                temp = (rawtemp/64)-273.15
+
+                if temp < min_temp:
+                    min_temp = temp
+                if temp > max_temp:
+                    max_temp = temp
+
+                scaled_temp = np.int8((temp-self.minimum_temperature)/(self.maximum_tempertaure - self.minimum_temperature)*256)
+                heatmap[i][j] = scaled_temp
+
+        LOGGER.info("Min temp: {} ({})| Max temp: {} ({})".format(min_temp, self.minimum_temperature, max_temp, self.maximum_tempertaure))
+
+        #colored_heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+        resized_heatmap = cv2.resize(heatmap, (self.width * self.scale, self.height * self.scale,), interpolation=cv2.INTER_CUBIC)
+
         if self.blur_radius>0:
-            resize_image = cv2.blur(resize_image,(self.blur_radius,self.blur_radius))   
+            resized_heatmap = cv2.blur(resized_heatmap,(self.blur_radius,self.blur_radius))
+        colored_heatmap = cv2.cvtColor(resized_heatmap, cv2.COLOR_GRAY2RGB)
 
-        heatmap = cv2.applyColorMap(resize_image, cv2.COLORMAP_JET)
-
-        return heatmap
-
-# def get_temperature_data(thdata):
-        
-#         # Find max temperature
-#         lomax = thdata[...,1].max()
-#         posmax = thdata[...,1].argmax()
-
-# 		mcol,mrow = divmod(posmax, self.width)
-# 		himax = thdata[mcol][mrow][0]
-# 		lomax=lomax*256
-        
-# 		maxtemp = himax+lomax
-# 		maxtemp = convert_kelvin_to_celcius(maxtemp)
-#         print("Max temperature: " + str(maxtemp))
-
-#         # Find min temperature
-#         lomin = thdata[...,1].min()
-# 		posmin = thdata[...,1].argmin()
-
-# 		lcol,lrow = divmod(posmin, self.width)
-# 		himin = thdata[lcol][lrow][0]
-# 		lomin=lomin*256
-
-# 		mintemp = himin+lomin
-# 		mintemp = convert_kelvin_to_celcius(mintemp)
-#         print("Min temperature: " + str(mintemp))
-
-#         # Find average temperature
-# 		loavg = thdata[...,1].mean()
-# 		hiavg = thdata[...,0].mean()
-# 		loavg=loavg*256
-
-# 		avgtemp = loavg+hiavg
-# 		avgtemp = convert_kelvin_to_celcius(avgtemp)
-
-#         print("Avg temperature: " + str(avgtemp))
-
-#         return (maxtemp, mintemp, avgtemp)
-
-# def convert_kelvin_to_celcius(temp):
-#     	return round((temp/64)-273.15, 2)
+        return colored_heatmap
