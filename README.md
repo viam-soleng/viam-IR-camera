@@ -1,6 +1,6 @@
 # Thermal IR Camera (TOPDON)
 
-This is a [Viam module](https://docs.viam.com/manage/configuration/#modules) for [TOPDON](https://www.topdon.com/)'s family of thermal imagers. This module extracts the raw intensity and thermal map from the video feed using the v4l2-ctl video capture package and converts it into a gray scale image using a defined minimum and maximum temperature. 
+This is a [Viam module](https://docs.viam.com/manage/configuration/#modules) for [TOPDON](https://www.topdon.com/)'s family of thermal imagers. This module extracts the raw intensity and thermal map from the video feed using the `v4l2-ctl` video capture package and converts it into a gray scale image using a defined minimum and maximum temperature. 
 
 > [!NOTE]
 > For more information on modules, see [Modular Resources](https://docs.viam.com/registry/#modular-resources).
