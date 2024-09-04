@@ -8,5 +8,6 @@
         "api": "rdk:component:camera",
         "model": "soleng-sandbox:camera:ir-camera"
       }
-    ]
+    ],
+    "entrypoint": "exec.sh"
   }

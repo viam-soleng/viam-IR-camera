@@ -12,3 +12,6 @@ lint-fix:
 
 lint-check:
 	black src --diff --check
+
+module.tar.gz:
+	tar czf $@ *.sh .env src requirements.txt

@@ -5,3 +5,5 @@ __pycache__/
 
 # Environments
 .venv
+
+module.tar.gz
