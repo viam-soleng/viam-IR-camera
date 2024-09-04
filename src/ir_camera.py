@@ -72,7 +72,7 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
         # # Extract config info
         device_path = get_attribute_from_config("device_path", None, str)
         self.minimum_temperature = get_attribute_from_config("minimum_temperature", 16., float) # Celcius
-        self.maximum_tempertaure = get_attribute_from_config("maximum_temperature", 25., float) # Celcius
+        self.maximum_temperature = get_attribute_from_config("maximum_temperature", 25., float) # Celcius
         self.scale = get_attribute_from_config("scale", 1, int)
         self.blur_radius = get_attribute_from_config("blur_radius", 1, int)
         
@@ -132,10 +132,10 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
                 if temp > max_temp:
                     max_temp = temp
 
-                scaled_temp = np.int8((temp-self.minimum_temperature)/(self.maximum_tempertaure - self.minimum_temperature)*256)
+                scaled_temp = np.int8((temp-self.minimum_temperature)/(self.maximum_temperature - self.minimum_temperature)*256)
                 heatmap[i][j] = scaled_temp
 
-        LOGGER.info("Min temp: {} ({})| Max temp: {} ({})".format(min_temp, self.minimum_temperature, max_temp, self.maximum_tempertaure))
+        LOGGER.info("Min temp: {} ({})| Max temp: {} ({})".format(min_temp, self.minimum_temperature, max_temp, self.maximum_temperature))
 
         #colored_heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
         resized_heatmap = cv2.resize(heatmap, (self.width * self.scale, self.height * self.scale,), interpolation=cv2.INTER_CUBIC)
