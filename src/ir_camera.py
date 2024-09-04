@@ -19,7 +19,7 @@ from viam.resource.types import Model, ModelFamily
 LOGGER = getLogger(__name__)
 
 class IRCamera(Camera, Reconfigurable, Stoppable):
-    family = ModelFamily("viam-soleng", "camera")
+    family = ModelFamily("soleng-sandbox", "camera")
     MODEL = Model(family, "ir-camera")
 
     class Properties(NamedTuple):
