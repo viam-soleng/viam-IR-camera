@@ -1,36 +1,18 @@
-#!/usr/bin/env bash
-# setup.sh -- environment bootstrapper for python virtualenv
+#!/bin/bash
+set -e
+UNAME=$(uname -s)
 
-set -euo pipefail
-
-SUDO=sudo
-if ! command -v $SUDO; then
-	echo no sudo on this system, proceeding as current user
-	SUDO=""
+if [ "$UNAME" = "Linux" ]
+then
+    echo "Installing venv on Linux"
+    sudo apt-get install -y python3-venv
+fi
+if [ "$UNAME" = "Darwin" ]
+then
+    echo "Installing venv on Darwin"
+    brew install python3-venv
 fi
 
-if command -v apt-get; then
-	if dpkg --status python3-venv > /dev/null; then
-		echo "python3-venv is installed, skipping setup"
-	else
-		if ! apt info python3-venv; then
-			echo package info not found, trying apt update
-			$SUDO apt-get -qq update
-		fi
-		$SUDO apt-get install -qqy python3-venv
-	fi
-else
-	echo Skipping tool installation because your platform is missing apt-get.
-	echo If you see failures below, install the equivalent of python3-venv for your system.
-fi
-
-source .env
-if [ -f $VIRTUAL_ENV/.install_complete ]; then
-	echo "completion marker is present, skipping virtualenv setup"
-else
-	echo creating virtualenv at $VIRTUAL_ENV
-	python3 -m venv $VIRTUAL_ENV
-	echo installing dependencies from requirements.txt
-	$VIRTUAL_ENV/bin/pip install -r requirements.txt
-	touch $VIRTUAL_ENV/.install_complete
-fi
+python3 -m venv .venv
+. .venv/bin/activate
+pip3 install -r requirements.txt

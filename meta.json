@@ -10,7 +10,8 @@
     }
   ],
   "build": {
-    "build": "sh build.sh",
+    "build": "./build.sh",
+    "setup": "./setup.sh",
     "path": "dist/archive.tar.gz",
     "arch" : ["linux/arm64", "linux/amd64"]
   },
