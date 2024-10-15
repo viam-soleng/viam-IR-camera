@@ -42,7 +42,8 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
         return None
 
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> None:
-
+        if self.cap.isOpened():
+            self.cap.release()
         def get_attribute_from_config(attribute_name: str, default, of_type=None):
             if attribute_name not in config.attributes.fields:
                 return default
