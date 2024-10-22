@@ -15,6 +15,7 @@ from viam.proto.app.robot import ComponentConfig
 from viam.proto.common import ResourceName, ResponseMetadata
 from viam.resource.base import ResourceBase
 from viam.resource.types import Model, ModelFamily
+import time
 
 LOGGER = getLogger(__name__)
 
@@ -103,7 +104,7 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
 
         imdata, thdata = np.array_split(frame, 2)
 
-        thermal_image = await self._create_thermal_image(thdata)
+        thermal_image = self._create_thermal_image(thdata)
         img = Image.frombytes('RGB', (self.width * self.scale, self.height * self.scale), thermal_image)
         return pil_to_viam_image(img.convert('RGB'), CameraMimeType.JPEG)
     
@@ -116,29 +117,26 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
     async def get_properties(self, *, timeout: Optional[float] = None, **kwargs) -> Properties:
         return self.camera_properties
 
-    async def _create_thermal_image(self, thdata):
+    def _create_thermal_image(self, thdata):
         heatmap = np.zeros((self.height,self.width,1),dtype=np.uint8)
+        start_time = time.time()
 
         min_temp = 1000
         max_temp = 0
-        for i in range(self.height):
-            for j in range(self.width):
-                hi = thdata[i][j][0]
-                lo = thdata[i][j][1]
+        thdata = thdata.reshape(self.height, self.width, 2)
+        hi = thdata[:, :, 0].astype(np.int32)
+        lo = thdata[:, :, 1].astype(np.int32) * 256
 
-                lo = lo*256
-                rawtemp = hi+lo
-                temp = (rawtemp/64)-273.15
+        rawtemp = hi + lo
+        temp = (rawtemp / 64) - 273.15
 
-                if temp < min_temp:
-                    min_temp = temp
-                if temp > max_temp:
-                    max_temp = temp
+        min_temp = np.min(temp)
+        max_temp = np.max(temp)
 
-                scaled_temp = np.int8((temp-self.minimum_temperature)/(self.maximum_temperature - self.minimum_temperature)*256)
-                heatmap[i][j] = scaled_temp
+        scaled_temp = np.clip((temp - self.minimum_temperature) / (self.maximum_temperature - self.minimum_temperature) * 256, 0, 255).astype(np.uint8)
+        heatmap[:, :, 0] = scaled_temp
 
-        LOGGER.info("Min temp: {} ({})| Max temp: {} ({})".format(min_temp, self.minimum_temperature, max_temp, self.maximum_temperature))
+        LOGGER.debug("Min temp: {} ({})| Max temp: {} ({})".format(min_temp, self.minimum_temperature, max_temp, self.maximum_temperature))
 
         #colored_heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
         resized_heatmap = cv2.resize(heatmap, (self.width * self.scale, self.height * self.scale,), interpolation=cv2.INTER_CUBIC)
@@ -146,5 +144,9 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
         if self.blur_radius>0:
             resized_heatmap = cv2.blur(resized_heatmap,(self.blur_radius,self.blur_radius))
         colored_heatmap = cv2.cvtColor(resized_heatmap, cv2.COLOR_GRAY2RGB)
-
+        
+        end_time = time.time()
+        execution_time = end_time - start_time
+        LOGGER.debug(f"Thermal image creation took: {execution_time} seconds")
+        
         return colored_heatmap
