@@ -21,6 +21,7 @@ LOGGER = getLogger(__name__)
 class IRCamera(Camera, Reconfigurable, Stoppable):
     family = ModelFamily("soleng-sandbox", "camera")
     MODEL = Model(family, "ir-camera")
+    cap: Optional[cv2.VideoCapture] = None
 
     class Properties(NamedTuple):
         intrinsic_parameters: IntrinsicParameters
@@ -33,6 +34,7 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
         service = cls(config.name)
+        service.cap = None
         service.validate(config)
         service.reconfigure(config, dependencies)
         return service
@@ -42,7 +44,7 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
         return None
 
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> None:
-        if self.cap.isOpened():
+        if self.cap is not None and self.cap.isOpened():
             self.cap.release()
         def get_attribute_from_config(attribute_name: str, default, of_type=None):
             if attribute_name not in config.attributes.fields:
