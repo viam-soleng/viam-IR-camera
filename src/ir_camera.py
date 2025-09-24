@@ -1,48 +1,51 @@
 # Standard library
 import cv2
 from PIL import Image
-from typing import Any, Dict, List, Mapping, Optional, Tuple, NamedTuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple, NamedTuple, Any, Sequence, ClassVar
 from typing_extensions import Self
 import numpy as np
 
 # Viam module
-from viam.components.camera import Camera, IntrinsicParameters, DistortionParameters
+from viam.components.camera import Camera 
 from viam.logging import getLogger
 from viam.media.video import NamedImage, ViamImage
-from viam.media.utils.pil import viam_to_pil_image, pil_to_viam_image, CameraMimeType
+from viam.media.utils.pil import pil_to_viam_image, CameraMimeType
 from viam.module.types import Reconfigurable, Stoppable
 from viam.proto.app.robot import ComponentConfig
 from viam.proto.common import ResourceName, ResponseMetadata
 from viam.resource.base import ResourceBase
 from viam.resource.types import Model, ModelFamily
+from viam.utils import struct_to_dict
+
 import time
 
 LOGGER = getLogger(__name__)
 
 class IRCamera(Camera, Reconfigurable, Stoppable):
-    family = ModelFamily("soleng-sandbox", "camera")
-    MODEL = Model(family, "ir-camera")
+    MODEL: ClassVar[Model] = Model(ModelFamily("soleng-sandbox", "camera"), "ir-camera")
     cap: Optional[cv2.VideoCapture] = None
-
-    class Properties(NamedTuple):
-        intrinsic_parameters: IntrinsicParameters
-        """The properties of the camera"""
-        distortion_parameters: DistortionParameters
-        """The distortion parameters of the camera"""
-        supports_pcd: bool = False
-        """Whether the camera has a valid implementation of ``get_point_cloud``"""
     
+    def __init__(self, name: str):
+        super().__init__(name)
+        self.logger = getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.cap: Optional[cv2.VideoCapture] = None
+
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
-        service = cls(config.name)
-        service.cap = None
-        service.validate(config)
-        service.reconfigure(config, dependencies)
-        return service
-
+        camera = cls(config.name)
+        camera.cap = None
+        camera.camera_properties = Camera.Properties()
+        camera.validate_config(config)
+        camera.reconfigure(config, dependencies)
+        return camera 
+    
     @classmethod
-    def validate(cls, config: ComponentConfig) -> None:
-        return None
+    def validate_config(cls, config: ComponentConfig) -> Tuple[Sequence[str], Sequence[str]]:
+        attrs = struct_to_dict(config.attributes)
+        # Only check for device_path
+        if not attrs.get("device_path"):
+            raise ValueError("'device_path' is required")
+        return [], []
 
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> None:
         if self.cap is not None and self.cap.isOpened():
@@ -79,7 +82,11 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
         self.maximum_temperature = get_attribute_from_config("maximum_temperature", 25., float) # Celcius
         self.scale = get_attribute_from_config("scale", 1, int)
         self.blur_radius = get_attribute_from_config("blur_radius", 1, int)
-        
+         
+        # Grab camera stream 
+        self._initialize_camera(device_path)
+
+    def _initialize_camera(self, device_path: str) -> None:
         self.cap = cv2.VideoCapture(device_path, cv2.CAP_V4L)
         self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 0.0)
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -87,11 +94,14 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
 
         LOGGER.info("SELF.WIDTH: {} | SELF.HEIGHT: {}".format(self.width, self.height))
 
+        if not self.cap.isOpened():
+            raise Exception(f"Could not open video device at {device_path}")
+
     def stop(self, *,  extra: Optional[Mapping[str, Any]] = None, timeout: Optional[float] = None, **kwargs) -> None:
         LOGGER.info("STOPPING")
         self.cap.release()
 
-    async def get_image(self, mime_type: str = "", *, extra: Optional[Dict[str, Any]] = None, timeout: Optional[float] = None, **kwargs) -> ViamImage:
+    async def get_image(self, mime_type: str = "", *, timeout: Optional[float] = None, extra: Optional[Mapping[str, Any]] = None, metadata: Optional[Mapping[str, Any]] = None, **kwargs) -> ViamImage:
         if not self.cap.isOpened():
             LOGGER.error("video feed is not open, check if any ongoing processes are using the camera")
             return
@@ -108,13 +118,31 @@ class IRCamera(Camera, Reconfigurable, Stoppable):
         img = Image.frombytes('RGB', (self.width * self.scale, self.height * self.scale), thermal_image)
         return pil_to_viam_image(img.convert('RGB'), CameraMimeType.JPEG)
     
-    async def get_images(self, *, timeout: Optional[float] = None, **kwargs) -> Tuple[List[NamedImage], ResponseMetadata]:
-        raise NotImplementedError()
+    async def get_images(
+        self, 
+        *, 
+        timeout: Optional[float] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+        extra: Optional[Mapping[str, Any]] = None,
+        filter_source_names: Optional[List[str]] = None,
+        **kwargs
+    ) -> Tuple[List[NamedImage], ResponseMetadata]:
+    # Apply filtering if specified
+        if filter_source_names and self.name not in filter_source_names:
+            return [], ResponseMetadata()
+        
+        image = await self.get_image(timeout=timeout, **kwargs)
+        named_image = NamedImage(
+            name=self.name,
+            data=image.data,
+            mime_type=image.mime_type
+        )
+        return [named_image], ResponseMetadata()
 
     async def get_point_cloud(self, *, extra: Optional[Dict[str, Any]] = None, timeout: Optional[float] = None, **kwargs) -> Tuple[bytes, str]:
         raise NotImplementedError()
 
-    async def get_properties(self, *, timeout: Optional[float] = None, **kwargs) -> Properties:
+    async def get_properties(self, *, timeout: Optional[float] = None, **kwargs) -> Camera.Properties:
         return self.camera_properties
 
     def _create_thermal_image(self, thdata):

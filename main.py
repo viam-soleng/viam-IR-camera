@@ -4,6 +4,7 @@ from viam.components.camera import Camera
 from viam.logging import getLogger
 from viam.module.module import Module
 from viam.resource.registry import Registry, ResourceCreatorRegistration
+from viam.resource.types import API, RESOURCE_NAMESPACE_RDK, RESOURCE_TYPE_COMPONENT
 from src.ir_camera import IRCamera
 
 LOGGER = getLogger(__name__)
@@ -13,13 +14,14 @@ async def main():
     Resources must be pre-registered. For an example, see the `__init__.py` file.
     """
     Registry.register_resource_creator(
-        Camera.SUBTYPE,
+        Camera.API,
         IRCamera.MODEL,
-        ResourceCreatorRegistration(IRCamera.new, IRCamera.validate),
+        ResourceCreatorRegistration(IRCamera.new, IRCamera.validate_config),
     )
 
     module = Module.from_args()
-    module.add_model_from_registry(IRCamera.SUBTYPE, IRCamera.MODEL)
+    # SDK 0.55.1: add_model_from_registry takes API and Model
+    module.add_model_from_registry(Camera.API, IRCamera.MODEL)
     LOGGER.debug("Starting module in main.py.")
     await module.start()
 
