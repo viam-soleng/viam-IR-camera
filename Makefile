@@ -14,7 +14,8 @@ lint-check:
 	black src --diff --check
 
 module.tar.gz:
-	tar czf $@ *.sh .env src requirements.txt
+	make pyinstaller
+	tar czf module.tar.gz dist/main meta.json
 
 pyinstaller:
 	./build.sh

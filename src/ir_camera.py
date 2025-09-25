@@ -22,7 +22,7 @@ import time
 LOGGER = getLogger(__name__)
 
 class IRCamera(Camera, Reconfigurable, Stoppable):
-    MODEL: ClassVar[Model] = Model(ModelFamily("soleng-sandbox", "camera"), "ir-camera")
+    MODEL: ClassVar[Model] = Model(ModelFamily("viam-soleng", "camera"), "ir-camera")
     cap: Optional[cv2.VideoCapture] = None
     
     def __init__(self, name: str):

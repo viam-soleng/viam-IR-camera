@@ -1,11 +1,12 @@
-name: Upload Release to Viam Registry
+name: Upload to Viam Registry
 
 on:
+  push:
   release:
     types: [published]
 
 env:
-  VERSION: ${{ github.ref_name }}
+  VERSION: ${{ github.event_name == 'release' && github.ref_name || format('0.0.0-{0}.{1}', github.ref_name, github.run_number) }}
 
 jobs:
   build:
@@ -21,11 +22,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: module-${{ matrix.platform }}
-          path: module.tar.gz
+          path: |
+            module.tar.gz
+            meta.json
 
   upload:
     needs: build
     runs-on: ubuntu-22.04
+    if: ${{ github.event_name == 'release' }}
     strategy:
       matrix:
         platform: [arm64, amd64]
